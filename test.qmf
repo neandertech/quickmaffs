@@ -1,0 +1,9 @@
+worst = (5 + 1)
+x = (worst + 11)
+z = 17
+t = (x * 1)
+h = (x * (11 + worst))
+hs = (x * (z + worst))
+astalavista = 11
+r = (x + astalavista)
+
