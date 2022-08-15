@@ -12,7 +12,6 @@ jobs:
         with:
           distribution: 'temurin' 
           java-version: '17'
-          cache: 'sbt'
 
       - uses: VirtusLab/scala-cli-setup@main
 
