@@ -1,7 +1,3 @@
-//> using scala "3.1.2"
-//> using lib "org.typelevel::cats-parse::0.3.8"
-//> using plugin "org.polyvariant:::better-tostring:0.3.15"
-
 import cats.parse.Parser as P
 import cats.parse.Parser0 as P0
 import cats.parse.Caret

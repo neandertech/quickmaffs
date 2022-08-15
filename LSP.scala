@@ -1,15 +1,4 @@
-//> using lib "tech.neander::langoustine-lsp::0.0.6"
-//> using lib "tech.neander::jsonrpclib-fs2::0.0.2"
-//> using lib "co.fs2::fs2-io::3.2.11"
-
 import langoustine.lsp.*
-
-import requests.*
-import notifications as nt
-import structures.*
-import aliases.*
-import enumerations.*
-import json.*
 
 import cats.effect.*
 import jsonrpclib.fs2.*
@@ -27,27 +16,44 @@ import cats.syntax.all.*
 
 object LSP extends IOApp.Simple:
   import QuickmaffsLSP.{server, State}
+
   def run =
-    FS2Channel
-      .lspCompliant[IO](
-        byteStream = fs2.io.stdin(256),
-        byteSink = fs2.io.stdout
-      )
+    FS2Channel[IO](2048, None)
       .evalTap { channel =>
         IO.ref(Map.empty[DocumentUri, State])
           .flatMap { state =>
             server(state).bind(channel)
           }
       }
-      .flatMap(_.openStream)
-      .evalMap(_ => IO.never)
+      .flatMap(channel =>
+        fs2.Stream
+          .eval(IO.never) // running the server forever
+          .concurrently(
+            fs2.io
+              .stdin[IO](512)
+              .through(lsp.decodePayloads)
+              .through(channel.input)
+          )
+          .concurrently(
+            channel.output
+              .through(lsp.encodePayloads)
+              .through(fs2.io.stdout[IO])
+          )
+      )
       .compile
       .drain
+      .guarantee(IO.consoleForIO.errorln("Terminating server"))
   end run
 
 end LSP
 
 object QuickmaffsLSP:
+  import requests.*
+  import structures.*
+  import aliases.*
+  import enumerations.*
+  import json.*
+
   enum State:
     case Empty
     case InvalidCode(err: QuickmaffsParser.ParsingError)
@@ -107,7 +113,7 @@ object QuickmaffsLSP:
     def recompile(uri: DocumentUri, back: Communicate[IO]) =
       def publish(vec: Vector[Diagnostic]) =
         back.notification(
-          nt.textDocument.publishDiagnostics,
+          textDocument.publishDiagnostics,
           PublishDiagnosticsParams(uri, diagnostics = vec)
         )
 
@@ -161,11 +167,11 @@ object QuickmaffsLSP:
         case _ => None
       }
 
-    ImmutableLSPBuilder
+    LSPBuilder
       .create[IO]
       .handleRequest(initialize) { (in, back) =>
         back.notification(
-          nt.window.showMessage,
+          window.showMessage,
           ShowMessageParams(
             message = "Hello from Quickmaffs",
             `type` = enumerations.MessageType.Info
@@ -192,10 +198,10 @@ object QuickmaffsLSP:
             )
           }
       }
-      .handleNotification(nt.textDocument.didOpen) { (in, back) =>
+      .handleNotification(textDocument.didOpen) { (in, back) =>
         recompile(in.textDocument.uri, back)
       }
-      .handleNotification(nt.textDocument.didSave) { (in, back) =>
+      .handleNotification(textDocument.didSave) { (in, back) =>
         recompile(in.textDocument.uri, back)
       }
       .handleRequest(textDocument.definition) { (in, back) =>

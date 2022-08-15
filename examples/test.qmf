@@ -1,0 +1,9 @@
+worsts = (5 + 1)
+x = (worsts + 11)
+z = 17
+t = (x * 1)
+h = (x * (11 + worsts))
+hs = (x * (z + worsts))
+a = 11
+r = (x + a)
+
