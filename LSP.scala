@@ -14,7 +14,6 @@ import langoustine.lsp.runtime.Opt
 import langoustine.lsp.runtime.uinteger
 
 import cats.syntax.all.*
-import io.chrisdavenport.crossplatformioapp.CrossPlatformIOApp
 import langoustine.lsp.app.LangoustineApp
 
 object LSP extends LangoustineApp:
