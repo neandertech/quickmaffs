@@ -6,17 +6,17 @@ clean:
 
 bin/repl:
 	mkdir -p bin
-	scala-cli package . -M REPL -f -o bin/repl
+	scala-cli package . --main-class REPL --force --output bin/repl
 
 bin/lsp:
 	mkdir -p bin
-	scala-cli package . -M LSP -f -o bin/lsp
+	scala-cli package . --main-class LSP --force --output bin/lsp
 
 bin/quickmaffs:
 	mkdir -p bin
-	scala-cli package . -M INTERPRETER -f -o bin/quickmaffs
+	scala-cli package . --main-class INTERPRETER --force --output bin/quickmaffs
 
-repl: bin/repl 
-lsp: bin/lsp 
-interpreter: bin/quickmaffs 
+repl: bin/repl
+lsp: bin/lsp
+interpreter: bin/quickmaffs
 
