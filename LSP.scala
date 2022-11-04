@@ -15,37 +15,20 @@ import langoustine.lsp.runtime.uinteger
 
 import cats.syntax.all.*
 import io.chrisdavenport.crossplatformioapp.CrossPlatformIOApp
+import langoustine.lsp.app.LangoustineApp
 
-object LSP extends CrossPlatformIOApp.Simple:
+object LSP extends LangoustineApp:
   import QuickmaffsLSP.{server, State}
 
-  def run =
-    FS2Channel[IO](2048, None)
-      .evalTap { channel =>
-        IO.ref(Map.empty[DocumentUri, State])
-          .flatMap { state =>
-            server(state).bind(channel, shutdown = IO.unit)
-          }
+  def server(
+      args: List[String]
+  ): Resource[cats.effect.IO, LSPBuilder[cats.effect.IO]] =
+    Resource
+      .eval(IO.ref(Map.empty[DocumentUri, State]))
+      .map { state =>
+        QuickmaffsLSP.server(state)
       }
-      .flatMap(channel =>
-        fs2.Stream
-          .eval(IO.never) // running the server forever
-          .concurrently(
-            fs2.io
-              .stdin[IO](512)
-              .through(lsp.decodePayloads)
-              .through(channel.input)
-          )
-          .concurrently(
-            channel.output
-              .through(lsp.encodePayloads)
-              .through(fs2.io.stdout[IO])
-          )
-      )
-      .compile
-      .drain
-      .guarantee(IO.consoleForIO.errorln("Terminating server"))
-  end run
+      .onFinalize(IO.consoleForIO.errorln("Terminating server"))
 
 end LSP
 
