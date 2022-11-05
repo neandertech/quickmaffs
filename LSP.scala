@@ -9,50 +9,33 @@ import fs2.io.file.Path
 import cats.parse.Parser
 import QuickmaffsCompiler.CompileError
 import QuickmaffsCompiler.Index
-import langoustine.lsp.RuntimeBase.DocumentUri
-import langoustine.lsp.RuntimeBase.uinteger
+import langoustine.lsp.runtime.DocumentUri
+import langoustine.lsp.runtime.Opt
+import langoustine.lsp.runtime.uinteger
 
 import cats.syntax.all.*
+import langoustine.lsp.app.LangoustineApp
 
-object LSP extends IOApp.Simple:
+object LSP extends LangoustineApp:
   import QuickmaffsLSP.{server, State}
 
-  def run =
-    FS2Channel[IO](2048, None)
-      .evalTap { channel =>
-        IO.ref(Map.empty[DocumentUri, State])
-          .flatMap { state =>
-            server(state).bind(channel)
-          }
+  def server(
+      args: List[String]
+  ): Resource[cats.effect.IO, LSPBuilder[cats.effect.IO]] =
+    Resource
+      .eval(IO.ref(Map.empty[DocumentUri, State]))
+      .map { state =>
+        QuickmaffsLSP.server(state)
       }
-      .flatMap(channel =>
-        fs2.Stream
-          .eval(IO.never) // running the server forever
-          .concurrently(
-            fs2.io
-              .stdin[IO](512)
-              .through(lsp.decodePayloads)
-              .through(channel.input)
-          )
-          .concurrently(
-            channel.output
-              .through(lsp.encodePayloads)
-              .through(fs2.io.stdout[IO])
-          )
-      )
-      .compile
-      .drain
-      .guarantee(IO.consoleForIO.errorln("Terminating server"))
-  end run
+      .onFinalize(IO.consoleForIO.errorln("Terminating server"))
 
 end LSP
 
 object QuickmaffsLSP:
   import requests.*
-  import structures.*
   import aliases.*
   import enumerations.*
-  import json.*
+  import structures.*
 
   enum State:
     case Empty
@@ -68,7 +51,7 @@ object QuickmaffsLSP:
 
   extension (s: cats.parse.Caret)
     def toPosition: Position =
-      Position(line = uinteger(s.line), character = uinteger(s.col))
+      Position(line = s.line, character = s.col)
 
   extension (s: Span)
     def toRange: Range = Range(s.from.toPosition, s.to.toPosition)
@@ -143,7 +126,7 @@ object QuickmaffsLSP:
               )
             )
           case State.RuntimeError(err) =>
-            val zero = uinteger(0)
+            val zero = 0
             publish(
               Vector(
                 Diagnostic(
@@ -210,9 +193,13 @@ object QuickmaffsLSP:
             foundMaybe
               .map(_._2)
               .map { vdf =>
-                Definition(Location(in.textDocument.uri, vdf.definedAt.toRange))
+                Opt(
+                  Definition(
+                    Location(in.textDocument.uri, vdf.definedAt.toRange)
+                  )
+                )
               }
-              .getOrElse(null)
+              .getOrElse(Opt.empty)
         }
       }
       .handleRequest(textDocument.hover) { (in, back) =>
@@ -229,39 +216,42 @@ object QuickmaffsLSP:
                   vdf.fullDefinition.to.offset
                 )
 
-                Nullable {
+                Opt {
                   Hover(
                     MarkupContent(
                       kind = MarkupKind.Markdown,
                       s"""
-                        |`$varName`
-                        |---
-                        |
-                        |**Value**: $value 
-                        |
-                        |**Formula**: $text
-                        """.stripMargin.trim
+                      |`$varName`
+                      |---
+                      |
+                      |**Value**: $value
+                      |
+                      |**Formula**: $text
+                      """.stripMargin.trim
                     )
                   )
                 }
               }
-              .getOrElse(Nullable.NULL)
+              .getOrElse(Opt.empty)
 
-          case _ => Nullable.NULL
+          case _ => Opt.empty
         }
       }
       .handleRequest(textDocument.documentSymbol) { (in, back) =>
         get(in.textDocument.uri).map {
           case Some(State.Ok(idx, _, _)) =>
-            idx.variables.toVector.sortBy(_._1).map { case (n, df) =>
-              SymbolInformation(
-                location = Location(in.textDocument.uri, df.definedAt.toRange),
-                name = n,
-                kind = enumerations.SymbolKind.Variable
-              )
+            Opt {
+              idx.variables.toVector.sortBy(_._1).map { case (n, df) =>
+                SymbolInformation(
+                  location =
+                    Location(in.textDocument.uri, df.definedAt.toRange),
+                  name = n,
+                  kind = enumerations.SymbolKind.Variable
+                )
+              }
             }
 
-          case _ => Vector.empty
+          case _ => Opt(Vector.empty)
         }
       }
       .handleRequest(textDocument.rename) { (in, back) =>
@@ -273,7 +263,7 @@ object QuickmaffsLSP:
                   TextEdit(range = span.toRange, newText = in.newName)
                 }
 
-                Nullable {
+                Opt {
                   WorkspaceEdit(
                     changes = Opt(
                       Map(
@@ -283,7 +273,7 @@ object QuickmaffsLSP:
                   )
                 }
               }
-              .getOrElse(Nullable.NULL)
+              .getOrElse(Opt.empty)
         }
       }
   end server
