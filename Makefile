@@ -10,7 +10,7 @@ bin/repl:
 
 bin/lsp:
 	mkdir -p bin
-	scala-cli package . --main-class LSP --force --output bin/lsp
+	scala-cli package . --main-class LSP --force --output bin/lsp --native-image -- --no-fallback
 
 bin/quickmaffs:
 	mkdir -p bin

@@ -202,6 +202,12 @@ object QuickmaffsLSP:
               .getOrElse(Opt.empty)
         }
       }
+        .handleRequest(textDocument.semanticTokens.full) {(in, back) => 
+
+        get(in.textDocument.uri).map {
+                    case Some(State.Ok(idx, values, program)) =>
+
+        }}
       .handleRequest(textDocument.hover) { (in, back) =>
         get(in.textDocument.uri).map {
           case Some(State.Ok(idx, values, program)) =>
