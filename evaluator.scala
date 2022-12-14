@@ -37,10 +37,10 @@ object QuickmaffsEvaluator:
       case Expr.Name(v) =>
         state.get(v).toRight(EvaluationError.NameNotFound(v))
 
-      case Expr.Add(e1, e2) =>
+      case Expr.Add(e1, e2, _) =>
         (evaluate(e1, state), evaluate(e2, state)).mapN(_ + _)
 
-      case Expr.Mul(e1, e2) =>
+      case Expr.Mul(e1, e2, _) =>
         (evaluate(e1, state), evaluate(e2, state)).mapN(_ * _)
 
   @targetName("evaluate_WithSpan")
