@@ -19,7 +19,7 @@ object QuickmaffsCompiler:
   def compile(p: Program[WithSpan]): Result =
     val errors = Vector.newBuilder[CompileError]
 
-    def indexReferences(e: Expr[WithSpan]) =
+    def indexReferences(e: Expr[WithSpan]): Map[String, Vector[Span]] =
       inline def pair(e1: Expr[WithSpan], e2: Expr[WithSpan]) =
         val m1      = go(e1)
         val m2      = go(e2)
@@ -33,8 +33,8 @@ object QuickmaffsCompiler:
         expr match
           case _: Lit[?]                 => Map.empty
           case Name(WithSpan(pos, name)) => Map(name -> Vector(pos))
-          case Add(e1, e2)               => pair(e1, e2)
-          case Mul(e1, e2)               => pair(e1, e2)
+          case Add(e1, e2, _)            => pair(e1, e2)
+          case Mul(e1, e2, _)            => pair(e1, e2)
 
       go(e)
     end indexReferences

@@ -15,6 +15,9 @@ import langoustine.lsp.runtime.uinteger
 
 import cats.syntax.all.*
 import langoustine.lsp.app.LangoustineApp
+import langoustine.lsp.tools.SemanticTokensEncoder
+import langoustine.lsp.tools.SemanticToken
+import cats.effect.std.Semaphore
 
 object LSP extends LangoustineApp:
   import QuickmaffsLSP.{server, State}
@@ -85,10 +88,9 @@ object QuickmaffsLSP:
       processFile(Path(path))
 
     def set(u: DocumentUri)(st: State) =
-      state.update(_.updated(u, st)) <*
-        cats.effect.std
-          .Console[IO]
-          .errorln(s"Setting $st for $u")
+      state.update(_.updated(u, st)) <* IO.consoleForIO.errorln(
+        s"State update: $u is set to ${st.getClass}"
+      )
 
     def get(u: DocumentUri) =
       state.get.map(_.get(u))
@@ -150,6 +152,15 @@ object QuickmaffsLSP:
         case _ => None
       }
 
+    val encoder = SemanticTokensEncoder(
+      tokenTypes = Vector(
+        SemanticTokenTypes.variable,
+        SemanticTokenTypes.number,
+        SemanticTokenTypes.operator
+      ),
+      modifiers = Vector.empty
+    )
+
     LSPBuilder
       .create[IO]
       .handleRequest(initialize) { (in, back) =>
@@ -167,6 +178,12 @@ object QuickmaffsLSP:
                 definitionProvider = Opt(true),
                 documentSymbolProvider = Opt(true),
                 renameProvider = Opt(true),
+                semanticTokensProvider = Opt(
+                  SemanticTokensOptions(
+                    legend = encoder.legend,
+                    full = Opt(true)
+                  )
+                ),
                 textDocumentSync = Opt(
                   TextDocumentSyncOptions(
                     openClose = Opt(true),
@@ -186,6 +203,72 @@ object QuickmaffsLSP:
       }
       .handleNotification(textDocument.didSave) { (in, back) =>
         recompile(in.textDocument.uri, back)
+      }
+      .handleRequest(textDocument.semanticTokens.full) { (in, back) =>
+        get(in.textDocument.uri).flatMap {
+          case Some(State.Ok(idx, values, program)) =>
+            val tokens = Vector.newBuilder[SemanticToken]
+            program.statements.map(_.value).foreach { st =>
+              st match
+                case Statement.Ass(name, e) =>
+                  inline def nameToken(tok: Expr.Name[WithSpan]) =
+                    tokenFromSpan(tok.value.span, SemanticTokenTypes.variable)
+
+                  inline def tokenFromSpan(
+                      span: Span,
+                      tpe: SemanticTokenTypes
+                  ) =
+                    SemanticToken.fromRange(
+                      span.toRange,
+                      tokenType = tpe
+                    )
+
+                  tokens += nameToken(name)
+
+                  def go(expr: Expr[WithSpan]): Unit =
+                    expr match
+                      case Expr.Add(l, r, operator) =>
+                        go(l)
+                        go(r)
+                        tokens += tokenFromSpan(
+                          operator.span,
+                          SemanticTokenTypes.operator
+                        )
+
+                      case Expr.Mul(l, r, operator) =>
+                        go(l)
+                        go(r)
+                        tokens += tokenFromSpan(
+                          operator.span,
+                          SemanticTokenTypes.operator
+                        )
+
+                      case n @ Expr.Name(_) =>
+                        tokens += nameToken(n)
+
+                      case Expr.Lit(value) =>
+                        tokens += tokenFromSpan(
+                          value.span,
+                          SemanticTokenTypes.number
+                        )
+
+                  go(e)
+            }
+
+            IO.consoleForIO
+              .errorln(
+                s"Sending over the following tokens: ${tokens.result().map(_.toString)}"
+              ) *>
+              IO.fromEither(encoder.encode(tokens.result())).map(Opt(_))
+
+          case other =>
+            IO.consoleForIO
+              .errorln(
+                s"Got weird state for ${in.textDocument.uri}: $other"
+              )
+              .as(Opt.empty)
+
+        }
       }
       .handleRequest(textDocument.definition) { (in, back) =>
         variableUnderCursor(in.textDocument.uri, in.position).map {

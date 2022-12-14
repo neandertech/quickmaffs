@@ -3,18 +3,22 @@ import cats.parse.Parser0 as P0
 import cats.parse.Caret
 import cats.parse.Rfc5234.{sp, alpha, digit, crlf, lf}
 
+import cats.syntax.all.*
+
+case class Operator(raw: Char)
+
 enum Expr[F[_]]:
-  case Add(l: Expr[F], r: Expr[F])
-  case Mul(l: Expr[F], r: Expr[F])
+  case Add(l: Expr[F], r: Expr[F], operator: F[Operator])
+  case Mul(l: Expr[F], r: Expr[F], operator: F[Operator])
   case Name(value: F[String])
   case Lit(value: F[Int])
 
   def map[G[_]](f: [A] => F[A] => G[A]): Expr[G] =
     this match
-      case Lit(num)    => Lit(f(num))
-      case Name(num)   => Name(f(num))
-      case Add(e1, e2) => Add(e1.map(f), e2.map(f))
-      case Mul(e1, e2) => Mul(e1.map(f), e2.map(f))
+      case Lit(num)       => Lit(f(num))
+      case Name(num)      => Name(f(num))
+      case Add(e1, e2, o) => Add(e1.map(f), e2.map(f), f(o))
+      case Mul(e1, e2, o) => Mul(e1.map(f), e2.map(f), f(o))
 end Expr
 
 enum Statement[F[_]]:
@@ -65,17 +69,23 @@ object QuickmaffsParser:
   val litNum =
     withSpan(P.charsWhile(_.isDigit).map(_.toInt)).map(Expr.Lit.apply)
 
-  val LB        = P.char('(').surroundedBy(sp.rep0)
-  val RB        = P.char(')').surroundedBy(sp.rep0)
-  val PLUS      = P.char('+').surroundedBy(sp.rep0)
-  val MUL       = P.char('*').surroundedBy(sp.rep0)
-  val ASS       = P.char('=').surroundedBy(sp.rep0)
-  val SEMICOLON = P.char(';')
+  inline def operator(ch: Char): P[WithSpan[Operator]] =
+    withSpan(P.char(ch).as(Operator(ch))).surroundedBy(sp.rep0)
+
+  val LB        = operator('(')
+  val RB        = operator(')')
+  val PLUS      = operator('+')
+  val MUL       = operator('*')
+  val ASS       = operator('=')
+  val SEMICOLON = operator(';')
 
   private val expr = P.recursive[Expr[WithSpan]] { recurse =>
 
-    inline def pair[F[_]](p: P[Expr[F]], sym: P0[Unit]) =
-      (p <* sym) ~ p
+    inline def pair[F[_]](
+        p: P[Expr[F]],
+        sym: P[F[Operator]]
+    ): P[(Expr[F], Expr[F], F[Operator])] =
+      (p, sym, p).tupled.map { case (l, o, r) => (l, r, o) }
 
     val e = recurse.surroundedBy(sp.rep0)
 
