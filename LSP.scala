@@ -218,12 +218,9 @@ object QuickmaffsLSP:
                       span: Span,
                       tpe: SemanticTokenTypes
                   ) =
-                    SemanticToken(
-                      span.toRange.start,
-                      length = span.toRange.end.character
-                        .map(_ - span.toRange.start.character.value),
-                      tokenType = tpe,
-                      modifiers = Vector.empty
+                    SemanticToken.fromRange(
+                      span.toRange,
+                      tokenType = tpe
                     )
 
                   tokens += nameToken(name)
@@ -261,8 +258,8 @@ object QuickmaffsLSP:
             IO.consoleForIO
               .errorln(
                 s"Sending over the following tokens: ${tokens.result().map(_.toString)}"
-              )
-              .as(Opt(encoder.encode(tokens.result())))
+              ) *>
+              IO.fromEither(encoder.encode(tokens.result())).map(Opt(_))
 
           case other =>
             IO.consoleForIO

@@ -4,6 +4,10 @@ clean:
 	rm -rf bin/*
 	scala-cli clean .
 
+setup:
+	scala-cli setup-ide *.scala
+
+
 bin/repl:
 	mkdir -p bin
 	scala-cli package . --main-class REPL --force --output bin/repl
