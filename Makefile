@@ -8,15 +8,20 @@ setup:
 	scala-cli setup-ide *.scala
 
 
-bin/repl:
+bin/repl: *.scala
 	mkdir -p bin
 	scala-cli package . --main-class REPL --force --output bin/repl
 
-bin/lsp:
+bin/lsp: *.scala
 	mkdir -p bin
 	scala-cli package . --main-class LSP --force --output bin/lsp 
 
-bin/quickmaffs:
+bin/lsp-native: *.scala
+	mkdir -p bin
+	scala-cli package . --main-class LSP --force --output bin/lsp-native --native
+
+
+bin/quickmaffs: *.scala
 	mkdir -p bin
 	scala-cli package . --main-class INTERPRETER --force --output bin/quickmaffs
 

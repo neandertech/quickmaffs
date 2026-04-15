@@ -111,7 +111,7 @@ object QuickmaffsLSP:
               Diagnostic(
                 range = span.toRange,
                 message = msg,
-                severity = Opt(DiagnosticSeverity.Error)
+                severity = Some(DiagnosticSeverity.Error)
               )
             }
 
@@ -123,7 +123,7 @@ object QuickmaffsLSP:
                 Diagnostic(
                   range = Span(parseError.caret, parseError.caret).toRange,
                   message = "Parsing failed",
-                  severity = Opt(DiagnosticSeverity.Error)
+                  severity = Some(DiagnosticSeverity.Error)
                 )
               )
             )
@@ -134,7 +134,7 @@ object QuickmaffsLSP:
                 Diagnostic(
                   range = Range(Position(zero, zero), Position(zero, zero)),
                   message = s"Runtime: ${err.message}",
-                  severity = Opt(DiagnosticSeverity.Error)
+                  severity = Some(DiagnosticSeverity.Error)
                 )
               )
             )
@@ -174,26 +174,26 @@ object QuickmaffsLSP:
           IO {
             InitializeResult(
               ServerCapabilities(
-                hoverProvider = Opt(true),
-                definitionProvider = Opt(true),
-                documentSymbolProvider = Opt(true),
-                renameProvider = Opt(true),
-                semanticTokensProvider = Opt(
+                hoverProvider = Some(true),
+                definitionProvider = Some(true),
+                documentSymbolProvider = Some(true),
+                renameProvider = Some(true),
+                semanticTokensProvider = Some(
                   SemanticTokensOptions(
                     legend = encoder.legend,
-                    full = Opt(true)
+                    full = Some(true)
                   )
                 ),
-                textDocumentSync = Opt(
+                textDocumentSync = Some(
                   TextDocumentSyncOptions(
-                    openClose = Opt(true),
-                    save = Opt(true)
+                    openClose = Some(true),
+                    save = Some(true)
                   )
                 )
               ),
-              Opt(
+              Some(
                 InitializeResult
-                  .ServerInfo(name = "Quickmaffs LSP", version = Opt("0.0.1"))
+                  .ServerInfo(name = "Quickmaffs LSP", version = Some("0.0.1"))
               )
             )
           }
@@ -259,7 +259,7 @@ object QuickmaffsLSP:
               .errorln(
                 s"Sending over the following tokens: ${tokens.result().map(_.toString)}"
               ) *>
-              IO.fromEither(encoder.encode(tokens.result())).map(Opt(_))
+              IO.fromEither(encoder.encode(tokens.result())).map(Some(_))
 
           case other =>
             IO.consoleForIO
@@ -276,7 +276,7 @@ object QuickmaffsLSP:
             foundMaybe
               .map(_._2)
               .map { vdf =>
-                Opt(
+                Some(
                   Definition(
                     Location(in.textDocument.uri, vdf.definedAt.toRange)
                   )
@@ -334,7 +334,7 @@ object QuickmaffsLSP:
               }
             }
 
-          case _ => Opt(Vector.empty)
+          case _ => Some(Vector.empty)
         }
       }
       .handleRequest(textDocument.rename) { (in, back) =>
@@ -348,7 +348,7 @@ object QuickmaffsLSP:
 
                 Opt {
                   WorkspaceEdit(
-                    changes = Opt(
+                    changes = Some(
                       Map(
                         in.textDocument.uri -> edits
                       )
@@ -356,7 +356,7 @@ object QuickmaffsLSP:
                   )
                 }
               }
-              .getOrElse(Opt.empty)
+              .getOrElse(None)
         }
       }
   end server
